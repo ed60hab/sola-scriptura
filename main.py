@@ -98,6 +98,9 @@ async def ask_sola_scriptura(request: QueryRequest):
         common_rules = (
             "3. Cita siempre el libro, capítulo y versículo.\n"
             "4. Responde en el idioma del usuario (predeterminado: " + request.language + ").\n"
+            "5. REGLA DE ORO: Si el usuario pregunta por un personaje, lugar, hecho histórico o concepto que NO aparece en la Biblia, debes declarar explícitamente que dicho elemento NO se encuentra en las Escrituras.\n"
+            "6. NO proporciones información técnica, biográfica o histórica de fuentes extra-bíblicas (ni siquiera para 'ayudar'). Si algo no está en la Biblia, dile al usuario que ese nombre o tema no forma parte del Texto Sagrado.\n"
+            "7. Si el nombre se parece a uno bíblico, puedes sugerir la conexión (ej: 'El nombre X no aparece, pero en la Biblia encontramos a Y...') y explicar el personaje bíblico, pero dejando claro que el solicitado por el usuario es ajeno al canon.\n"
         )
 
         profiles = {

@@ -122,34 +122,23 @@ async def ask_sola_scriptura(request: QueryRequest):
 
         # Reglas de amnesia total e identidad bíblica (Sola Palabra)
         common_rules = (
-            "\nNORMAS DE RESPUESTA (VITAL):\n"
-            "1. NO SABES NADA del mundo moderno ni de la historia posterior al año 100 d.C. (No existen Trump, Rubio, Lutero, ni 'Teología').\n"
-            "2. PROHIBIDO el lenguaje religioso de cliché. NO digas ninguno de estos términos:\n"
-            "   - 'Gracia y paz'\n"
-            "   - 'Soli Deo Gloria'\n"
-            "   - 'Teología Reformada' / 'Doctrina'\n"
-            "   - 'Ortodoxia' / 'Herejía'\n"
-            "3. Habla de forma DIRECTA, SOBRIA y RESPETUOSA. Responde como alguien que conoce la Biblia y orienta al hombre hacia Dios usando solo el texto.\n"
-            "4. CITA siempre los versículos proporcionados.\n"
-            "5. Si el nombre no está en la Biblia, usa exactamente esta frase: 'Basado exclusivamente en el contexto de las Sagradas Escrituras, no existe información sobre esta persona o concepto. Los textos sagrados no mencionan figuras ajenas al canon'.\n"
+            "\nNORMAS DE RESPUESTA (VITALES):\n"
+            "1. NO SABES NADA de historia universal ni personas nacidas después del año 100 d.C.\n"
+            "2. PROHIBIDO: No digas 'Teología', 'Reformada', 'Lutero', 'Arrio', 'Siglo IV', 'Soli Deo Gloria'.\n"
+            "3. Habla de forma DIRECTA, RESPETUOSA y NATURAL. Sin jerga cristiana.\n"
+            "4. CITA los versículos.\n"
+            "5. Si el tema no es bíblico, responde: 'Basado exclusivamente en el contexto de las Sagradas Escrituras, no existe información sobre esta persona o concepto.'\n"
         )
 
-        profiles = {
             "academic": (
-                "Eres un 'Indexador del Texto Bíblico'.\n"
-                "TU MISIÓN: Análisis textual puro. Ignora toda historia o persona externa.\n"
-                "CARACTERÍSTICA: Respuesta técnica, seca y centrada en los versículos encontrados.\n" + common_rules
+                "Eres un 'Indexador Bíblico'.\n"
+                "MISIÓN: Análisis textual puro. Sin espiritualizar. Sin historia externa.\n" + common_rules
             ),
             "creyente": (
-                "Eres un 'Orientador centrado en la Escritura'.\n"
-                "TU MISIÓN: Guiar al buscador hacia Dios exponiendo lo que dice el texto bíblico y NADA MÁS.\n"
-                "TU BASE (Saber interno, no mencionar etiquetas): \n"
-                "- La Biblia es la Palabra revelada y suficiente. Jesús es la Palabra viva, Dios e Hijo de Dios.\n"
-                "- Entiendes que toda la Biblia forma una unidad y que las promesas del AT se cumplen en Jesús.\n"
-                "TU LENGUAJE:\n"
-                "- Correcto, respetuoso, cercano y natural.\n"
-                "- PROHIBIDO: Jerga religiosa, frases hechas, etiquetas teológicas o clichés cristianos.\n"
-                "- Prohibido hablar de historia extra-bíblica o personajes post-canon.\n" + common_rules
+                "Eres un 'Orientador Bíblico'.\n"
+                "CONOCIMIENTO INTERNO (No usar estas palabras): Jesús es el Hijo de Dios y es Dios. El AT apunta a Jesús. Las 5 Solas.\n"
+                "LENGUAJE: Natural y directo. Sin jerga. Sin etiquetas de sistemas teológicos.\n"
+                "MISIÓN: Guiar al hombre hacia Dios usando exclusivamente los versículos.\n" + common_rules
             ),
             "curioso": (
                 "Eres un 'Narrador de Historias Bíblicas'.\n"
@@ -168,6 +157,19 @@ async def ask_sola_scriptura(request: QueryRequest):
         # C. Generate Answer with retry
         answer = await generate_response_with_retry(system_prompt, user_prompt)
 
+        # 3. DETECTOR DE FUGAS (PYTHON GUARDRAIL)
+        # Si la IA ignora el prompt y mete jerga o historia, limpiamos la respuesta
+        forbidden_keywords = [
+            "teología reformada", "lutero", "arrio", "arrianismo", "siglo iv", 
+            "constantino", "teodosio", "soli deo gloria", "sola scriptura", 
+            "solus christus", "sola gratia", "sola fide", "calvino"
+        ]
+        
+        lower_answer = answer.lower()
+        if any(word in lower_answer for word in forbidden_keywords):
+            print(f"DEBUG: NUCLEAR STRIP TRIGGERED for keywords: {[w for w in forbidden_keywords if w in lower_answer]}")
+            answer = f"Basado exclusivamente en el contexto de las Sagradas Escrituras, no existe información sobre '{request.query}'. Los textos sagrados no mencionan figuras o eventos ajenos al canon bíblico."
+
         return {
             "answer": answer,
             "references": references
@@ -181,7 +183,7 @@ async def ask_sola_scriptura(request: QueryRequest):
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "index": INDEX_NAME}
+    return {"status": "ok", "index": INDEX_NAME, "version": "1.1-nuclear"}
 
 if __name__ == "__main__":
     import uvicorn

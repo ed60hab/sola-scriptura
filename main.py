@@ -37,7 +37,7 @@ class QueryRequest(BaseModel):
     language: str = "es"
     profile: str = "academic" # academic, devotional, pastoral
 
-@retry(wait=wait_random_exponential(min=1, max=10), stop=stop_after_attempt(3))
+@retry(wait=wait_random_exponential(min=2, max=30), stop=stop_after_attempt(5), before=lambda rs: print(f"DEBUG: Retry attempt {rs.attempt_number} for embed"))
 async def get_embedding_with_retry(text):
     try:
         # Usamos el cliente ASÍNCRONO
@@ -51,7 +51,7 @@ async def get_embedding_with_retry(text):
         print(f"DEBUG EMBED ERROR: {e}")
         raise e
 
-@retry(wait=wait_random_exponential(min=1, max=10), stop=stop_after_attempt(3))
+@retry(wait=wait_random_exponential(min=2, max=30), stop=stop_after_attempt(5), before=lambda rs: print(f"DEBUG: Retry attempt {rs.attempt_number} for generate"))
 async def generate_response_with_retry(system_prompt, user_prompt, model_name="models/gemini-1.5-flash-latest"):
     try:
         # Usamos el cliente ASÍNCRONO
@@ -173,12 +173,20 @@ async def ask_sola_scriptura(request: QueryRequest):
     except Exception as e:
         import traceback
         traceback.print_exc()
-        print(f"Error in RAG chain: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        error_msg = str(e)
+        status_code = 500
+        
+        # Detectar errores de cuota o reintentos agotados
+        if "429" in error_msg or "Resource has been exhausted" in error_msg or "RetryError" in error_msg:
+            error_msg = "Límite de cuota de la IA agotado o muchas peticiones. Por favor, espera un minuto e inténtalo de nuevo."
+            status_code = 429
+            
+        print(f"Error in RAG chain: {error_msg}")
+        raise HTTPException(status_code=status_code, detail=error_msg)
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "index": INDEX_NAME, "version": "1.5-lean-async-VERIFIED"}
+    return {"status": "ok", "index": INDEX_NAME, "version": "1.6-patience"}
 
 if __name__ == "__main__":
     import uvicorn

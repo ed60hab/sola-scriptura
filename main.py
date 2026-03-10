@@ -67,6 +67,33 @@ async def generate_response_with_retry(system_prompt, user_prompt):
 @app.post("/ask")
 async def ask_sola_scriptura(request: QueryRequest):
     try:
+        # 1. GUARDRAIL (PRE-FILTRO BINARIO)
+        # Este paso detiene la consulta si detecta nombres o temas ajenos a la Biblia
+        # antes incluso de buscar en los versículos.
+        guardrail_prompt = (
+            "Eres un filtro de seguridad estricto para una aplicación de Sola Scriptura.\n"
+            "Tu única misión es decidir si la pregunta del usuario es estrictamente bíblica.\n\n"
+            "Responde 'RECHAZAR' si la pregunta menciona:\n"
+            "- Nombres de personas que NO están en la Biblia (ej: Trump, Marco Rubio, Biden, Teodosio, Constantino, Lutero, etc.)\n"
+            "- Conceptos históricos post-bíblicos (ej: Reforma, Edicto de Tesalónica, Papado, Siglo IV).\n"
+            "- Cualquier tema que no sea una doctrina bíblica o un personaje de los 66 libros del canon.\n\n"
+            "Responde 'CONTINUAR' si la pregunta es sobre:\n"
+            "- Personajes bíblicos (Moisés, Abraham, Jesús, Job, Pablo, etc.)\n"
+            "- Doctrina bíblica pura (Justificación, Gracia, Redención, etc.)\n\n"
+            "SÉ EXTREMADAMENTE ESTRICTO. Ante la duda, responde RECHAZAR.\n"
+            "Respuesta (SOLO la palabra RECHAZAR o CONTINUAR):"
+        )
+        
+        classification = await generate_response_with_retry(guardrail_prompt, request.query)
+        print(f"DEBUG GUARDRAIL: {classification}")
+        
+        if "RECHAZAR" in classification.upper():
+            return {
+                "answer": f"Basado exclusivamente en el contexto de las Sagradas Escrituras, no existe información sobre un personaje o concepto llamado '{request.query}'. Los textos sagrados no contienen mención de figuras o eventos ajenos al canon bíblico.",
+                "references": []
+            }
+
+        # 2. PROCESO RAG (Solo si el guardarraíl lo permite)
         # A. Embed Query
         query_vector = await get_embedding_with_retry(request.query)
 
@@ -110,9 +137,9 @@ async def ask_sola_scriptura(request: QueryRequest):
                 "OBJETIVO: Análisis neutro de palabras encontradas en los versículos. Si el nombre no está, di que no existe.\n" + common_rules
             ),
             "creyente": (
-                "IDENTIDAD: Escriba del Siglo I con Amnesia del Mundo Exterior.\n"
-                "Para ti, el mundo exterior no existe. No conoces a nadie nacido después del año 100 d.C. (ej. Trump, Arrio, Teodosio).\n"
-                "OBJETIVO: Mostrar a Cristo en la Biblia usando SOLO los versículos. No espiritualices a personas externas.\n" + common_rules
+                "ACTÚA COMO UN ESCRIBA BÍBLICO ESTRICTO. No conoces la historia del mundo fuera de la Biblia.\n"
+                "REGLA DE RECHAZO: Si te preguntan por alguien ajeno al canon (ej: Marco Rubio, Trump, Teodosio), tu única respuesta debe ser: 'Basado exclusivamente en el contexto de las Sagradas Escrituras, no existe información sobre esta persona. Los textos sagrados no mencionan figuras ajenas al canon'.\n"
+                "Sola Scriptura. Solus Christus. Solo responde sobre la Biblia.\n" + common_rules
             ),
             "curioso": (
                 "IDENTIDAD: Narrador Bíblico Estricto.\n"

@@ -71,15 +71,12 @@ async def ask_sola_scriptura(request: QueryRequest):
         # Este paso detiene la consulta si detecta nombres o temas ajenos a la Biblia
         # antes incluso de buscar en los versículos.
         guardrail_prompt = (
-            "Eres un filtro de seguridad para una aplicación de Sola Scriptura.\n"
-            "Tu misión es RECHAZAR cualquier pregunta que NO sea puramente bíblica.\n\n"
-            "Responde 'RECHAZAR' si la pregunta trata sobre:\n"
-            "- Nombres MODERNOS o CONTEMPORÁNEOS (Trump, Rubio, etc.)\n"
-            "- Personajes históricos POST-BÍBLICOS (Lutero, Teodosio, Constantino, papas, etc.)\n"
-            "- Sistemas de pensamiento humano (Teología Reformada, Calvinismo, Protestantismo, etc.)\n"
-            "- Historia de la Iglesia, Concilios o Doctrina sistematizada por nombres humanos.\n\n"
-            "Responde 'CONTINUAR' solo si la pregunta es sobre el texto de la Biblia o sus personajes (Jesús, Moisés, etc.).\n"
-            "Ante la duda, elige RECHAZAR.\n"
+            "Eres un filtro BINARIO. Tu única misión es detectar si la pregunta trata sobre el canon bíblico.\n"
+            "Responde 'RECHAZAR' si la pregunta menciona:\n"
+            "- Nombres modernos o de geografía actual (Madrid, España, Trump, Rubio).\n"
+            "- Historia post-bíblica o personajes externos (Lutero, Arrio, Teodosio).\n"
+            "- Sistemas teológicos o doctrinas con nombres humanos.\n"
+            "Responde 'CONTINUAR' solo si la pregunta es sobre personajes o texto de los 66 libros de la Biblia.\n"
             "Respuesta (RECHAZAR o CONTINUAR):"
         )
         
@@ -130,6 +127,7 @@ async def ask_sola_scriptura(request: QueryRequest):
             "5. Si el tema no es bíblico, responde: 'Basado exclusivamente en el contexto de las Sagradas Escrituras, no existe información sobre esta persona o concepto.'\n"
         )
 
+        profiles = {
             "academic": (
                 "Eres un 'Indexador Bíblico'.\n"
                 "MISIÓN: Análisis textual puro. Sin espiritualizar. Sin historia externa.\n" + common_rules
@@ -183,7 +181,7 @@ async def ask_sola_scriptura(request: QueryRequest):
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "index": INDEX_NAME, "version": "1.1-nuclear"}
+    return {"status": "ok", "index": INDEX_NAME, "version": "1.2-nuclear"}
 
 if __name__ == "__main__":
     import uvicorn

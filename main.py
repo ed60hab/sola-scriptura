@@ -40,7 +40,7 @@ class QueryRequest(BaseModel):
 @retry(wait=wait_random_exponential(min=2, max=30), stop=stop_after_attempt(5), before=lambda rs: print(f"DEBUG: Retry attempt {rs.attempt_number} for embed"))
 async def get_embedding_with_retry(text):
     try:
-        # Revertimos al modelo de embedding que sabemos que funciona
+        # Usamos el modelo de embedding verificado por el sistema
         embed_result = await client.aio.models.embed_content(
             model="models/gemini-embedding-001",
             contents=[text],
@@ -52,7 +52,7 @@ async def get_embedding_with_retry(text):
         raise e
 
 @retry(wait=wait_random_exponential(min=2, max=20), stop=stop_after_attempt(5), before=lambda rs: print(f"DEBUG: Retry attempt {rs.attempt_number} for generate"))
-async def generate_response_with_retry(system_prompt, user_prompt, model_name="models/gemini-1.5-flash"):
+async def generate_response_with_retry(system_prompt, user_prompt, model_name="models/gemini-2.0-flash"):
     try:
         # Usamos el cliente ASÍNCRONO
         response = await client.aio.models.generate_content(
@@ -192,7 +192,7 @@ async def ask_sola_scriptura(request: QueryRequest):
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "index": INDEX_NAME, "version": "2.0-stable"}
+    return {"status": "ok", "index": INDEX_NAME, "version": "2.1-final"}
 
 if __name__ == "__main__":
     import uvicorn

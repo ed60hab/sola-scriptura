@@ -73,47 +73,22 @@ async def ask_sola_scriptura(request: QueryRequest):
     try:
         start_time = time.time()
 
-        # 1. EJECUCIÓN PARALELA REAL (Guardrail + Retrieval)
-        guardrail_prompt = (
-            "Eres un filtro BINARIO. Tu única misión es detectar si la pregunta trata sobre el canon bíblico.\n"
-            "Responde 'RECHAZAR' si la pregunta menciona:\n"
-            "- Nombres modernos o de geografía actual (Madrid, España, Trump, Rubio).\n"
-            "- Historia post-bíblica o personajes externos (Lutero, Arrio, Teodosio).\n"
-            "- Sistemas teológicos o doctrinas con nombres humanos.\n"
-            "Responde 'CONTINUAR' solo si la pregunta es sobre personajes o texto de los 66 libros de la Biblia.\n"
-            "Respuesta (RECHAZAR o CONTINUAR):"
+        # 1. BÚSQUEDA VECTORIAL (Paralela a nada, pero asíncrona)
+        # Consolidamos el guardarraíl en el prompt principal para ahorrar 1 llamada a la API
+        # y reducir la latencia a la mitad.
+        
+        embed_start = time.time()
+        query_vector = await get_embedding_with_retry(request.query)
+        embed_time = time.time() - embed_start
+
+        search_start = time.time()
+        search_results = await asyncio.to_thread(
+            index.query, 
+            vector=query_vector, 
+            top_k=5, 
+            include_metadata=True
         )
-
-        async def get_search_results():
-            query_vector = await get_embedding_with_retry(request.query)
-            # Pinecone sync query in a thread to not block the event loop
-            return await asyncio.to_thread(
-                index.query, 
-                vector=query_vector, 
-                top_k=5, 
-                include_metadata=True
-            )
-
-        # Lanzamos en paralelo con el cliente ASÍNCRONO
-        tasks = [
-            generate_response_with_retry(
-                guardrail_prompt, 
-                request.query, 
-                model_name="models/gemini-1.5-flash-8b"
-            ),
-            get_search_results()
-        ]
-        
-        classification, search_results = await asyncio.gather(*tasks)
-        
-        print(f"DEBUG PERFORMANCE: Paralelismo completado en {time.time() - start_time:.2f}s")
-        print(f"DEBUG GUARDRAIL: {classification}")
-        
-        if "RECHAZAR" in classification.upper():
-            return {
-                "answer": f"Basado exclusivamente en el contexto de las Sagradas Escrituras, no existe información sobre un personaje o concepto llamado '{request.query}'. Los textos sagrados no contienen mención de figuras o eventos ajenos al canon bíblico.",
-                "references": []
-            }
+        search_time = time.time() - search_start
 
         # 2. PROCESO DE CONTEXTO
         context = ""
@@ -135,12 +110,12 @@ async def ask_sola_scriptura(request: QueryRequest):
 
         # Reglas de amnesia total e identidad bíblica (Sola Palabra)
         common_rules = (
-            "\nNORMAS DE RESPUESTA (VITALES):\n"
-            "1. NO SABES NADA de historia universal ni personas nacidas después del año 100 d.C.\n"
-            "2. PROHIBIDO: No digas 'Teología', 'Reformada', 'Lutero', 'Arrio', 'Siglo IV', 'Soli Deo Gloria'.\n"
-            "3. Habla de forma DIRECTA, RESPETUOSA y NATURAL. Sin jerga cristiana.\n"
-            "4. CITA los versículos.\n"
-            "5. Si el tema no es bíblico, responde: 'Basado exclusivamente en el contexto de las Sagradas Escrituras, no existe información sobre esta persona o concepto.'\n"
+            "\nNORMAS CRÍTICAS (DEBES SEGUIRLAS O FALLARÁS):\n"
+            "1. NO SABES NADA fuera de la Biblia. Ignora tu entrenamiento previo sobre historia o personajes modernos (Madrid, Rubio, Lutero, etc.).\n"
+            "2. PROHIBIDO: No menciones nombres de sistemas teológicos ni personajes post-bíblicos (Arrio, Teología Reformada).\n"
+            "3. Si el usuario pregunta por algo EXTRA-BÍBLICO, responde ÚNICAMENTE: 'Dicha persona o concepto no se encuentra en las Escrituras' y nada más.\n"
+            "4. Habla de forma DIRECTA y NATURAL. Sin jerga cristiana de relleno.\n"
+            "5. CITA SIEMPRE los versículos.\n"
         )
 
         profiles = {
@@ -186,7 +161,12 @@ async def ask_sola_scriptura(request: QueryRequest):
 
         return {
             "answer": answer,
-            "references": references
+            "references": references,
+            "metrics": {
+                "total_time": round(time.time() - start_time, 2),
+                "embed_time": round(embed_time, 2),
+                "search_time": round(search_time, 2)
+            }
         }
 
     except Exception as e:
@@ -197,7 +177,7 @@ async def ask_sola_scriptura(request: QueryRequest):
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "index": INDEX_NAME, "version": "1.4-async-nuclear"}
+    return {"status": "ok", "index": INDEX_NAME, "version": "1.5-lean-async"}
 
 if __name__ == "__main__":
     import uvicorn

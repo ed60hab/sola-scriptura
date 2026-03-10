@@ -40,9 +40,9 @@ class QueryRequest(BaseModel):
 @retry(wait=wait_random_exponential(min=2, max=30), stop=stop_after_attempt(5), before=lambda rs: print(f"DEBUG: Retry attempt {rs.attempt_number} for embed"))
 async def get_embedding_with_retry(text):
     try:
-        # Usamos el cliente ASÍNCRONO
+        # Usamos el modelo más moderno y eficiente para embeddings
         embed_result = await client.aio.models.embed_content(
-            model="models/gemini-embedding-001",
+            model="models/text-embedding-004",
             contents=[text],
             config={"task_type": "RETRIEVAL_QUERY"}
         )
@@ -51,8 +51,8 @@ async def get_embedding_with_retry(text):
         print(f"DEBUG EMBED ERROR: {e}")
         raise e
 
-@retry(wait=wait_random_exponential(min=2, max=30), stop=stop_after_attempt(5), before=lambda rs: print(f"DEBUG: Retry attempt {rs.attempt_number} for generate"))
-async def generate_response_with_retry(system_prompt, user_prompt, model_name="models/gemini-1.5-flash-8b"):
+@retry(wait=wait_random_exponential(min=3, max=40), stop=stop_after_attempt(5), before=lambda rs: print(f"DEBUG: Retry attempt {rs.attempt_number} for generate"))
+async def generate_response_with_retry(system_prompt, user_prompt, model_name="models/gemini-1.5-flash"):
     try:
         # Usamos el cliente ASÍNCRONO
         response = await client.aio.models.generate_content(
@@ -143,6 +143,8 @@ async def ask_sola_scriptura(request: QueryRequest):
             f"Versículos para indexar:\n{context}\n\n"
             f"Usuario pregunta: {request.query}"
         )
+        
+        print(f"DEBUG: Context length: {len(context)} chars. Query: {request.query}")
 
         # C. Generate Answer with retry
         answer = await generate_response_with_retry(system_prompt, user_prompt)
@@ -178,7 +180,7 @@ async def ask_sola_scriptura(request: QueryRequest):
         
         # Detectar errores de cuota o reintentos agotados
         if "429" in error_msg or "Resource has been exhausted" in error_msg or "RetryError" in error_msg:
-            error_msg = "Límite de cuota de la IA agotado o muchas peticiones. Por favor, espera un minuto e inténtalo de nuevo."
+            error_msg = f"La IA está saturada (Cuota Google Agotada). Detalle técnico para diagnóstico: {error_msg[:100]}"
             status_code = 429
             
         print(f"Error in RAG chain: {error_msg}")
@@ -186,7 +188,7 @@ async def ask_sola_scriptura(request: QueryRequest):
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "index": INDEX_NAME, "version": "1.7-quota-safe"}
+    return {"status": "ok", "index": INDEX_NAME, "version": "1.8-extreme-patience"}
 
 if __name__ == "__main__":
     import uvicorn

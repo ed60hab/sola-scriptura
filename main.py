@@ -3,10 +3,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
 import json
+import asyncio
+import time
 from dotenv import load_dotenv
 from google import genai
 from pinecone import Pinecone
-from tenacity import retry, wait_random_exponential, stop_after_attempt, retry_if_exception_type
+from tenacity import retry, wait_random_exponential, stop_after_attempt
 
 # 1. Load config
 load_dotenv()
@@ -35,10 +37,11 @@ class QueryRequest(BaseModel):
     language: str = "es"
     profile: str = "academic" # academic, devotional, pastoral
 
-@retry(wait=wait_random_exponential(min=1, max=60), stop=stop_after_attempt(6))
+@retry(wait=wait_random_exponential(min=1, max=10), stop=stop_after_attempt(3))
 async def get_embedding_with_retry(text):
     try:
-        embed_result = client.models.embed_content(
+        # Usamos el cliente ASÍNCRONO
+        embed_result = await client.aio.models.embed_content(
             model="models/gemini-embedding-001",
             contents=[text],
             config={"task_type": "RETRIEVAL_QUERY"}
@@ -48,10 +51,11 @@ async def get_embedding_with_retry(text):
         print(f"DEBUG EMBED ERROR: {e}")
         raise e
 
-@retry(wait=wait_random_exponential(min=1, max=30), stop=stop_after_attempt(5))
+@retry(wait=wait_random_exponential(min=1, max=10), stop=stop_after_attempt(3))
 async def generate_response_with_retry(system_prompt, user_prompt, model_name="models/gemini-1.5-flash-latest"):
     try:
-        response = client.models.generate_content(
+        # Usamos el cliente ASÍNCRONO
+        response = await client.aio.models.generate_content(
             model=model_name,
             contents=[user_prompt],
             config={
@@ -67,12 +71,9 @@ async def generate_response_with_retry(system_prompt, user_prompt, model_name="m
 @app.post("/ask")
 async def ask_sola_scriptura(request: QueryRequest):
     try:
-        import asyncio
-        import time
         start_time = time.time()
 
-        # 1. EJECUCIÓN PARALELA (Guardrail + Retrieval)
-        # Lanzamos ambas tareas al mismo tiempo para ahorrar RTT
+        # 1. EJECUCIÓN PARALELA REAL (Guardrail + Retrieval)
         guardrail_prompt = (
             "Eres un filtro BINARIO. Tu única misión es detectar si la pregunta trata sobre el canon bíblico.\n"
             "Responde 'RECHAZAR' si la pregunta menciona:\n"
@@ -85,11 +86,21 @@ async def ask_sola_scriptura(request: QueryRequest):
 
         async def get_search_results():
             query_vector = await get_embedding_with_retry(request.query)
-            return index.query(vector=query_vector, top_k=5, include_metadata=True)
+            # Pinecone sync query in a thread to not block the event loop
+            return await asyncio.to_thread(
+                index.query, 
+                vector=query_vector, 
+                top_k=5, 
+                include_metadata=True
+            )
 
-        # Usamos Flash-8b para el guardrail porque es instantáneo y ahorra cuota
+        # Lanzamos en paralelo con el cliente ASÍNCRONO
         tasks = [
-            generate_response_with_retry(guardrail_prompt, request.query, model_name="models/gemini-1.5-flash-8b"),
+            generate_response_with_retry(
+                guardrail_prompt, 
+                request.query, 
+                model_name="models/gemini-1.5-flash-8b"
+            ),
             get_search_results()
         ]
         
@@ -186,7 +197,7 @@ async def ask_sola_scriptura(request: QueryRequest):
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "index": INDEX_NAME, "version": "1.3-fast-nuclear"}
+    return {"status": "ok", "index": INDEX_NAME, "version": "1.4-async-nuclear"}
 
 if __name__ == "__main__":
     import uvicorn

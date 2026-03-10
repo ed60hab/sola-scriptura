@@ -89,6 +89,7 @@ async def ask_sola_scriptura(request: QueryRequest):
             include_metadata=True
         )
         search_time = time.time() - search_start
+        print(f"DEBUG: Search completed in {search_time:.2f}s")
 
         # 2. PROCESO DE CONTEXTO
         context = ""
@@ -177,7 +178,7 @@ async def ask_sola_scriptura(request: QueryRequest):
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "index": INDEX_NAME, "version": "1.5-lean-async"}
+    return {"status": "ok", "index": INDEX_NAME, "version": "1.5-lean-async-VERIFIED"}
 
 if __name__ == "__main__":
     import uvicorn

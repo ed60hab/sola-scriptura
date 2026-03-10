@@ -48,11 +48,11 @@ async def get_embedding_with_retry(text):
         print(f"DEBUG EMBED ERROR: {e}")
         raise e
 
-@retry(wait=wait_random_exponential(min=1, max=60), stop=stop_after_attempt(6))
-async def generate_response_with_retry(system_prompt, user_prompt):
+@retry(wait=wait_random_exponential(min=1, max=30), stop=stop_after_attempt(5))
+async def generate_response_with_retry(system_prompt, user_prompt, model_name="models/gemini-1.5-flash-latest"):
     try:
         response = client.models.generate_content(
-            model="models/gemini-flash-latest",
+            model=model_name,
             contents=[user_prompt],
             config={
                 "system_instruction": system_prompt,
@@ -61,15 +61,18 @@ async def generate_response_with_retry(system_prompt, user_prompt):
         )
         return response.text
     except Exception as e:
-        print(f"DEBUG GENERATE ERROR: {e}")
+        print(f"DEBUG GENERATE ERROR ({model_name}): {e}")
         raise e
 
 @app.post("/ask")
 async def ask_sola_scriptura(request: QueryRequest):
     try:
-        # 1. GUARDRAIL (PRE-FILTRO BINARIO)
-        # Este paso detiene la consulta si detecta nombres o temas ajenos a la Biblia
-        # antes incluso de buscar en los versículos.
+        import asyncio
+        import time
+        start_time = time.time()
+
+        # 1. EJECUCIÓN PARALELA (Guardrail + Retrieval)
+        # Lanzamos ambas tareas al mismo tiempo para ahorrar RTT
         guardrail_prompt = (
             "Eres un filtro BINARIO. Tu única misión es detectar si la pregunta trata sobre el canon bíblico.\n"
             "Responde 'RECHAZAR' si la pregunta menciona:\n"
@@ -79,8 +82,20 @@ async def ask_sola_scriptura(request: QueryRequest):
             "Responde 'CONTINUAR' solo si la pregunta es sobre personajes o texto de los 66 libros de la Biblia.\n"
             "Respuesta (RECHAZAR o CONTINUAR):"
         )
+
+        async def get_search_results():
+            query_vector = await get_embedding_with_retry(request.query)
+            return index.query(vector=query_vector, top_k=5, include_metadata=True)
+
+        # Usamos Flash-8b para el guardrail porque es instantáneo y ahorra cuota
+        tasks = [
+            generate_response_with_retry(guardrail_prompt, request.query, model_name="models/gemini-1.5-flash-8b"),
+            get_search_results()
+        ]
         
-        classification = await generate_response_with_retry(guardrail_prompt, request.query)
+        classification, search_results = await asyncio.gather(*tasks)
+        
+        print(f"DEBUG PERFORMANCE: Paralelismo completado en {time.time() - start_time:.2f}s")
         print(f"DEBUG GUARDRAIL: {classification}")
         
         if "RECHAZAR" in classification.upper():
@@ -89,17 +104,7 @@ async def ask_sola_scriptura(request: QueryRequest):
                 "references": []
             }
 
-        # 2. PROCESO RAG (Solo si el guardarraíl lo permite)
-        # A. Embed Query
-        query_vector = await get_embedding_with_retry(request.query)
-
-        # B. Retrieve relevant verses (top 5)
-        search_results = index.query(
-            vector=query_vector,
-            top_k=5,
-            include_metadata=True
-        )
-
+        # 2. PROCESO DE CONTEXTO
         context = ""
         references = []
         for match in search_results["matches"]:
@@ -181,7 +186,7 @@ async def ask_sola_scriptura(request: QueryRequest):
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "index": INDEX_NAME, "version": "1.2-nuclear"}
+    return {"status": "ok", "index": INDEX_NAME, "version": "1.3-fast-nuclear"}
 
 if __name__ == "__main__":
     import uvicorn

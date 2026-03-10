@@ -8,7 +8,7 @@ import time
 from dotenv import load_dotenv
 from google import genai
 from pinecone import Pinecone
-from tenacity import retry, wait_random_exponential, stop_after_attempt
+from tenacity import retry, wait_random_exponential, stop_after_attempt, RetryError
 
 # 1. Load config
 load_dotenv()
@@ -52,7 +52,7 @@ async def get_embedding_with_retry(text):
         raise e
 
 @retry(wait=wait_random_exponential(min=2, max=30), stop=stop_after_attempt(5), before=lambda rs: print(f"DEBUG: Retry attempt {rs.attempt_number} for generate"))
-async def generate_response_with_retry(system_prompt, user_prompt, model_name="models/gemini-1.5-flash-latest"):
+async def generate_response_with_retry(system_prompt, user_prompt, model_name="models/gemini-1.5-flash-8b"):
     try:
         # Usamos el cliente ASÍNCRONO
         response = await client.aio.models.generate_content(
@@ -186,7 +186,7 @@ async def ask_sola_scriptura(request: QueryRequest):
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "index": INDEX_NAME, "version": "1.6-patience"}
+    return {"status": "ok", "index": INDEX_NAME, "version": "1.7-quota-safe"}
 
 if __name__ == "__main__":
     import uvicorn

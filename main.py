@@ -51,8 +51,8 @@ async def get_embedding_with_retry(text):
         print(f"DEBUG EMBED ERROR: {e}")
         raise e
 
-@retry(wait=wait_random_exponential(min=3, max=40), stop=stop_after_attempt(5), before=lambda rs: print(f"DEBUG: Retry attempt {rs.attempt_number} for generate"))
-async def generate_response_with_retry(system_prompt, user_prompt, model_name="models/gemini-1.5-flash"):
+@retry(wait=wait_random_exponential(min=2, max=30), stop=stop_after_attempt(5), before=lambda rs: print(f"DEBUG: Retry attempt {rs.attempt_number} for generate"))
+async def generate_response_with_retry(system_prompt, user_prompt, model_name="models/gemini-2.0-flash-lite-preview-02-05"):
     try:
         # Usamos el cliente ASÍNCRONO
         response = await client.aio.models.generate_content(
@@ -179,8 +179,12 @@ async def ask_sola_scriptura(request: QueryRequest):
         status_code = 500
         
         # Detectar errores de cuota o reintentos agotados
-        if "429" in error_msg or "Resource has been exhausted" in error_msg or "RetryError" in error_msg:
-            error_msg = f"La IA está saturada (Cuota Google Agotada). Detalle técnico para diagnóstico: {error_msg[:100]}"
+        if isinstance(e, RetryError):
+            last_err = e.last_attempt.exception()
+            error_msg = f"Reintentos agotados tras 5 intentos. Causa última: {last_err}"
+            status_code = 429 if "429" in str(last_err) else 500
+        elif "429" in error_msg or "Resource has been exhausted" in error_msg:
+            error_msg = f"La IA está saturada (Cuota Google Agotada). Info: {error_msg[:100]}"
             status_code = 429
             
         print(f"Error in RAG chain: {error_msg}")
@@ -188,7 +192,7 @@ async def ask_sola_scriptura(request: QueryRequest):
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "index": INDEX_NAME, "version": "1.8-extreme-patience"}
+    return {"status": "ok", "index": INDEX_NAME, "version": "1.9-vanguard"}
 
 if __name__ == "__main__":
     import uvicorn

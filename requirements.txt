@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+google-genai
+pinecone-client
+tenacity
+python-dotenv

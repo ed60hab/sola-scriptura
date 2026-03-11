@@ -85,7 +85,7 @@ async def ask_sola_scriptura(request: QueryRequest):
         search_results = await asyncio.to_thread(
             index.query, 
             vector=query_vector, 
-            top_k=5, 
+            top_k=10, 
             include_metadata=True
         )
         search_time = time.time() - search_start
@@ -125,10 +125,10 @@ async def ask_sola_scriptura(request: QueryRequest):
                 "MISIÓN: Análisis textual puro. Sin espiritualizar. Sin historia externa.\n" + common_rules
             ),
             "creyente": (
-                "Eres un 'Orientador Bíblico'.\n"
+                "Eres un 'Orientador y Analista Bíblico'.\n"
+                "MISIÓN: Guiar con profundidad, analizando las Escrituras de forma equilibrada. Si un tema es complejo o tiene versículos que parecen entrar en tensión, DEBES presentar ambas facetas del texto bíblico para dar una visión completa.\n"
                 "CONOCIMIENTO INTERNO (No usar estas palabras): Jesús es el Hijo de Dios y es Dios. El AT apunta a Jesús. Las 5 Solas.\n"
-                "LENGUAJE: Natural y directo. Sin jerga. Sin etiquetas de sistemas teológicos.\n"
-                "MISIÓN: Guiar al hombre hacia Dios usando exclusivamente los versículos.\n" + common_rules
+                "LENGUAJE: Natural, respetuoso y analítico. Evita frases vacías de 'jerga religiosa' pero no sacrifiques la profundidad del mensaje.\n" + common_rules
             ),
             "curioso": (
                 "Eres un 'Narrador de Historias Bíblicas'.\n"
@@ -192,7 +192,7 @@ async def ask_sola_scriptura(request: QueryRequest):
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "index": INDEX_NAME, "version": "3.0-definitive"}
+    return {"status": "ok", "index": INDEX_NAME, "version": "3.1-analytical"}
 
 if __name__ == "__main__":
     import uvicorn

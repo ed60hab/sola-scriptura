@@ -52,7 +52,7 @@ async def get_embedding_with_retry(text):
         raise e
 
 @retry(wait=wait_random_exponential(min=2, max=20), stop=stop_after_attempt(5), before=lambda rs: print(f"DEBUG: Retry attempt {rs.attempt_number} for generate"))
-async def generate_response_with_retry(system_prompt, user_prompt, model_name="models/gemini-1.5-flash-8b"):
+async def generate_response_with_retry(system_prompt, user_prompt, model_name="models/gemini-2.5-flash"):
     try:
         # Usamos el cliente ASÍNCRONO
         response = await client.aio.models.generate_content(
@@ -192,7 +192,7 @@ async def ask_sola_scriptura(request: QueryRequest):
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "index": INDEX_NAME, "version": "2.2-stable-recovery"}
+    return {"status": "ok", "index": INDEX_NAME, "version": "3.0-definitive"}
 
 if __name__ == "__main__":
     import uvicorn
